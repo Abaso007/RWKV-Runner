@@ -23,7 +23,4 @@ def set(key, value):
 
 
 def get(key):
-    if key in GLOBALS:
-        return GLOBALS[key]
-    else:
-        return None
+    return GLOBALS[key] if key in GLOBALS else None

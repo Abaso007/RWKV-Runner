@@ -20,10 +20,7 @@ class MyDataset(Dataset):
             rank_zero_info(f"Current vocab size = {self.vocab_size} (make sure it's correct)")
 
             if args.data_file.endswith('/'):
-                d_all = []
-                for p in os.listdir(args.data_file):
-                    if p.endswith(".idx"):
-                        d_all += [p[:-4]]
+                d_all = [p[:-4] for p in os.listdir(args.data_file) if p.endswith(".idx")]
                 d_all.sort()
                 rank_zero_info(d_all)
                 exit(0)
@@ -41,10 +38,10 @@ class MyDataset(Dataset):
                 self.samples_per_epoch = args.epoch_steps * args.real_bsz
                 assert self.samples_per_epoch == 40320
                 rank_zero_info(f"########## Pile 20b-tokenized stage {args.my_pile_stage} ##########")
-                dataset_slot = self.data_size // args.ctx_len
                 if args.my_pile_stage != 4:
                     assert MaybeIsPrime(args.magic_prime)
                     assert args.magic_prime % 3 == 2
+                    dataset_slot = self.data_size // args.ctx_len
                     assert args.magic_prime / dataset_slot > 0.99 and args.magic_prime / dataset_slot <= 1
         elif args.data_type == "numpy":
             self.data = np.load(args.data_file).astype("int")
@@ -77,21 +74,13 @@ class MyDataset(Dataset):
             rank_zero_info("Building token list...")
             unique = sorted(list(set(self.data)))
             self.vocab_size = len(unique)
-            # rank_zero_info()
-            # for u in unique:
-            #     print(u, end=' ')
-            # rank_zero_info('\n\n')
-            xx = 0
-            xxObj = {}
-            for u in unique:
-                xxObj[xx] = u
-                xx += 1
+            xxObj = dict(enumerate(unique))
             with open(f"{args.proj_dir}/vocab.json", "w", encoding="utf-16le") as vocab_file:
                 vocab_file.write(json.dumps(xxObj, ensure_ascii=False))
             self.data_size = len(self.data)
             rank_zero_info(f"Data has {self.data_size} tokens, {self.vocab_size} vocab size.")
             self.stoi = {ch: i for i, ch in enumerate(unique)}
-            self.itos = {i: ch for i, ch in enumerate(unique)}
+            self.itos = dict(enumerate(unique))
 
     def __len__(self):
         return self.args.epoch_steps * self.args.micro_bsz
@@ -125,7 +114,8 @@ class MyDataset(Dataset):
                         pp.worker_seed = worker_seed
                 self.data = iter(self.data_raw)
                 # print(f"WebDataset loaded for rank {rank} epoch {epoch}")
-            if self.data == None:
+
+            if self.data is None:
                 init_wds(self)
             trial = 0
             while trial < 10:
@@ -137,7 +127,6 @@ class MyDataset(Dataset):
                     self.error_count += 1
                     init_wds(self, self.error_count)
                     trial += 1
-                    pass
             # print(f"epoch {epoch} idx {idx} rank {rank}/{world_size} {dd[2]}")
             # with open(f"sample_{rank}.txt", "a", encoding="utf-8") as tmp:
             #     tmp.write(f"epoch {epoch} idx {idx} rank {rank}/{world_size} {int(dd[1]['key'])}\n")

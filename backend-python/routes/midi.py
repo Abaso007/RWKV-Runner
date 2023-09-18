@@ -113,9 +113,9 @@ def text_to_wav(body: TextToWavBody):
 
     text = body.text.strip()
     if not text.startswith("<start>"):
-        text = "<start> " + text
+        text = f"<start> {text}"
     if not text.endswith("<end>"):
-        text = text + " <end>"
+        text = f"{text} <end>"
     txt_path = f"midi/{body.wav_name}.txt"
     midi_path = f"midi/{body.wav_name}.mid"
     wav_path = f"midi/{body.wav_name}.wav"

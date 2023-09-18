@@ -397,9 +397,7 @@ def convert_midi_to_str(
 
     def flush_token_data_buffer():
         nonlocal token_data_buffer, output, cfg, utils, augment
-        token_data = [
-            x for x in utils.prog_data_list_to_token_data_list(token_data_buffer)
-        ]
+        token_data = list(utils.prog_data_list_to_token_data_list(token_data_buffer))
         if augment.instrument_bin_remap or augment.transpose_semitones:
             # TODO put transpose in a real function
             raw_transpose = (
@@ -491,7 +489,7 @@ def convert_midi_to_str(
         elif t == "note_off":
             handle_note_off(msg.channel, channel_program[msg.channel], msg.note)
         elif t == "control_change":
-            if msg.control == 7 or msg.control == 39:  # volume
+            if msg.control in [7, 39]:  # volume
                 channel_volume[msg.channel] = msg.value
             elif msg.control == 11:  # expression
                 channel_expression[msg.channel] = msg.value
@@ -502,12 +500,9 @@ def convert_midi_to_str(
                         handle_note_off(msg.channel, program, note)
                     channel_pedal_events[msg.channel] = {}
             elif msg.control == 123:  # all notes off
-                for channel in channel_notes.keys():
+                for channel in channel_notes:
                     for note in list(channel_notes[channel]).copy():
                         handle_note_off(channel, channel_program[channel], note)
-        else:
-            pass
-
     flush_token_data_buffer()
     output.append("<end>")
     return " ".join(output)
@@ -601,54 +596,52 @@ def token_to_midi_message(
                     time=ticks,
                     channel=channel,
                 ), state
-    else:
-        if token[0] == "t" and token[1].isdigit():  # wait token
-            d = utils.wait_token_to_delta(token)
-            state.delta_accum += d
-            state.total_time += d
-            if utils.cfg.decode_end_held_note_delay != 0.0:
-                # remove notes that have been held for too long
-                for (channel, note), start_time in list(
-                    state.active_notes.items()
-                ).copy():
-                    if (
-                        state.total_time - start_time
-                        > utils.cfg.decode_end_held_note_delay * 1000.0
-                    ):
-                        ticks = int(
-                            mido.second2tick(state.delta_accum / 1000.0, 480, 500000)
-                        )
-                        state.delta_accum = 0.0
-                        del state.active_notes[(channel, note)]
-                        yield mido.Message(
-                            "note_off", note=note, time=ticks, channel=channel
-                        ), state
-                        return
-        else:  # note token
-            bin, note, velocity = utils.note_token_to_data(token)
-            channel = utils.cfg.bin_channel_map[utils.cfg.bin_instrument_names[bin]]
-            ticks = int(mido.second2tick(state.delta_accum / 1000.0, 480, 500000))
-            state.delta_accum = 0.0
-            if velocity > 0:
-                if utils.cfg.decode_fix_repeated_notes:
-                    if (channel, note) in state.active_notes:
-                        del state.active_notes[(channel, note)]
+    elif token[0] == "t" and token[1].isdigit():  # wait token
+        d = utils.wait_token_to_delta(token)
+        state.delta_accum += d
+        state.total_time += d
+        if utils.cfg.decode_end_held_note_delay != 0.0:
+            # remove notes that have been held for too long
+            for (channel, note), start_time in list(
+                state.active_notes.items()
+            ).copy():
+                if (
+                    state.total_time - start_time
+                    > utils.cfg.decode_end_held_note_delay * 1000.0
+                ):
+                    ticks = int(
+                        mido.second2tick(state.delta_accum / 1000.0, 480, 500000)
+                    )
+                    state.delta_accum = 0.0
+                    del state.active_notes[(channel, note)]
                     yield mido.Message(
                         "note_off", note=note, time=ticks, channel=channel
                     ), state
-                    ticks = 0
-                state.active_notes[(channel, note)] = state.total_time
-                yield mido.Message(
-                    "note_on", note=note, velocity=velocity, time=ticks, channel=channel
-                ), state
-                return
-            else:
+                    return
+    else:  # note token
+        bin, note, velocity = utils.note_token_to_data(token)
+        channel = utils.cfg.bin_channel_map[utils.cfg.bin_instrument_names[bin]]
+        ticks = int(mido.second2tick(state.delta_accum / 1000.0, 480, 500000))
+        state.delta_accum = 0.0
+        if velocity > 0:
+            if utils.cfg.decode_fix_repeated_notes:
                 if (channel, note) in state.active_notes:
                     del state.active_notes[(channel, note)]
                 yield mido.Message(
                     "note_off", note=note, time=ticks, channel=channel
                 ), state
-                return
+                ticks = 0
+            state.active_notes[(channel, note)] = state.total_time
+            yield mido.Message(
+                "note_on", note=note, velocity=velocity, time=ticks, channel=channel
+            ), state
+        else:
+            if (channel, note) in state.active_notes:
+                del state.active_notes[(channel, note)]
+            yield mido.Message(
+                "note_off", note=note, time=ticks, channel=channel
+            ), state
+        return
     yield None, state
 
 

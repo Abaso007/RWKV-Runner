@@ -155,22 +155,7 @@ def longest_prefix_state(body: LongestPrefixStateBody, request: Request):
             pass
     except:
         pass
-    if id != -1:
-        v = dtrie[id]
-        device: torch.device = v["device"]
-        prompt: str = trie[id]
-
-        quick_log(request, body, "Hit:\n" + prompt)
-        return {
-            "prompt": prompt,
-            "tokens": v["tokens"],
-            "state": [tensor.to(device) for tensor in v["state"]]
-            if device != torch.device("cpu")
-            else v["state"],
-            "logits": v["logits"],
-            "device": device.type,
-        }
-    else:
+    if id == -1:
         return {
             "prompt": "",
             "tokens": [],
@@ -178,6 +163,20 @@ def longest_prefix_state(body: LongestPrefixStateBody, request: Request):
             "logits": None,
             "device": None,
         }
+    v = dtrie[id]
+    prompt: str = trie[id]
+
+    quick_log(request, body, "Hit:\n" + prompt)
+    device: torch.device = v["device"]
+    return {
+        "prompt": prompt,
+        "tokens": v["tokens"],
+        "state": [tensor.to(device) for tensor in v["state"]]
+        if device != torch.device("cpu")
+        else v["state"],
+        "logits": v["logits"],
+        "device": device.type,
+    }
 
 
 @router.post("/save-state", tags=["State Cache"])

@@ -20,9 +20,7 @@ class ClsEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, BaseModel):
             return obj.dict()
-        if isinstance(obj, Enum):
-            return obj.value
-        return super().default(obj)
+        return obj.value if isinstance(obj, Enum) else super().default(obj)
 
 
 def quick_log(request: Request, body: Any, response: str):

@@ -97,7 +97,7 @@ if os.environ.get('RWKV_CUDA_ON') == '1':
     @MyStatic
     def cuda_mm8_seq(B: int, N: int, M: int, x, w, mx, rx, my, ry):
         assert x.dtype == mx.dtype == rx.dtype == my.dtype == ry.dtype
-        assert x.dtype == torch.float32 or x.dtype == torch.float16
+        assert x.dtype in [torch.float32, torch.float16]
         assert w.dtype == torch.uint8
         assert x.shape == [B, N]
         assert w.shape == [N, M]
@@ -109,7 +109,7 @@ if os.environ.get('RWKV_CUDA_ON') == '1':
     @MyStatic
     def cuda_mm8_one(N: int, M: int, x, w, mx, rx, my, ry):
         assert x.dtype == mx.dtype == rx.dtype == my.dtype == ry.dtype
-        assert x.dtype == torch.float32 or x.dtype == torch.float16
+        assert x.dtype in [torch.float32, torch.float16]
         assert w.dtype == torch.uint8
         assert x.shape == [N]
         assert w.shape == [N, M]

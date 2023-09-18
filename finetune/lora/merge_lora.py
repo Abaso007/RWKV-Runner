@@ -32,7 +32,7 @@ try:
         w: Dict[str, torch.Tensor] = torch.load(base_model, map_location="cpu")
         # merge LoRA-only slim checkpoint into the main weights
         w_lora: Dict[str, torch.Tensor] = torch.load(lora, map_location="cpu")
-        for k in w_lora.keys():
+        for k in w_lora:
             w[k] = w_lora[k]
         output_w: typing.OrderedDict[str, torch.Tensor] = OrderedDict()
         # merge LoRA weights
@@ -40,8 +40,8 @@ try:
         for k in keys:
             if k.endswith(".weight"):
                 prefix = k[: -len(".weight")]
-                lora_A = prefix + ".lora_A"
-                lora_B = prefix + ".lora_B"
+                lora_A = f"{prefix}.lora_A"
+                lora_B = f"{prefix}.lora_B"
                 if lora_A in keys:
                     assert lora_B in keys
                     print(f"merging {lora_A} and {lora_B} into {k}")

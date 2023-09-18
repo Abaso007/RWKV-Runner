@@ -40,10 +40,10 @@ def code(dtype):
     raise ValueError(dtype)
 
 def index_file_path(prefix_path):
-    return prefix_path + ".idx"
+    return f"{prefix_path}.idx"
 
 def data_file_path(prefix_path):
-    return prefix_path + ".bin"
+    return f"{prefix_path}.bin"
 
 class MMapIndexedDataset(torch.utils.data.Dataset):
     class Index(object):
@@ -210,10 +210,9 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         if isinstance(idx, int):
             ptr, size = self._index[idx]
-            np_array = np.frombuffer(
+            return np.frombuffer(
                 self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr
             )
-            return np_array
         elif isinstance(idx, slice):
             start, stop, step = idx.indices(len(self))
             if step != 1:
@@ -226,8 +225,7 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             np_array = np.frombuffer(
                 self._bin_buffer, dtype=self._index.dtype, count=total_size, offset=ptr
             )
-            sents = np.split(np_array, offsets[:-1])
-            return sents
+            return np.split(np_array, offsets[:-1])
 
     def get(self, idx, offset=0, length=None):
         """Retrieves a single item from the dataset with the option to only
@@ -239,10 +237,9 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         if length is None:
             length = size - offset
         ptr += offset * np.dtype(self._index.dtype).itemsize
-        np_array = np.frombuffer(
+        return np.frombuffer(
             self._bin_buffer, dtype=self._index.dtype, count=length, offset=ptr
         )
-        return np_array
 
     @property
     def sizes(self):

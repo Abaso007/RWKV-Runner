@@ -156,7 +156,7 @@ class LoraLinear(nn.Module):
         super().__init__()
 
         self.weight = nn.Parameter(torch.empty((out_features, in_features)))
-        assert bias == False, "Biased LoraLinear not supported"
+        assert not bias, "Biased LoraLinear not supported"
 
         r, alpha, dropout = LORA_CONFIG["r"], LORA_CONFIG[
             "alpha"], LORA_CONFIG["dropout"]
@@ -272,8 +272,7 @@ class RWKV_TimeMix(MyModule):
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             att = att.masked_fill(self.att_mask == 0, float('-inf'))
             att = F.softmax(att, dim = -1)
-            x = att @ v
-            return x
+            return att @ v
 
         @MyFunction
         def jit_funcQKV(self, x):
@@ -491,7 +490,7 @@ class RWKV(pl.LightningModule):
             # print('1x', lr_1x)
             # print('2x', lr_2x)
             # print('3x', lr_3x)
-            param_dict = {n: p for n, p in self.named_parameters()}
+            param_dict = dict(self.named_parameters())
             if args.my_pile_stage == 2:
                 optim_groups = [
                     {"params": [param_dict[n] for n in lr_1x], "weight_decay": 0.0, "my_lr_scale": 1.0},
@@ -534,24 +533,23 @@ class RWKV(pl.LightningModule):
         x = self.emb(idx)
         x_emb = x
 
-        if args.tiny_att_dim > 0:
-            for block in self.blocks:
+        for block in self.blocks:
+            if args.tiny_att_dim > 0:
                 if args.grad_cp == 1:
-                    if args.lora:
-                        x = torch_checkpoint(block, x, x_emb, use_reentrant=False)
-                    else:
-                        x = deepspeed.checkpointing.checkpoint(block, x, x_emb)
+                    x = (
+                        torch_checkpoint(block, x, x_emb, use_reentrant=False)
+                        if args.lora
+                        else deepspeed.checkpointing.checkpoint(block, x, x_emb)
+                    )
                 else:
                     x = block(x, x_emb)
-        else:
-            for block in self.blocks:
-                if args.grad_cp == 1:
-                    if args.lora:
-                        x = torch_checkpoint(block, x, x_emb, use_reentrant=False)
-                    else:
-                        x = deepspeed.checkpointing.checkpoint(block, x)
+            elif args.grad_cp == 1:
+                if args.lora:
+                    x = torch_checkpoint(block, x, x_emb, use_reentrant=False)
                 else:
-                    x = block(x)
+                    x = deepspeed.checkpointing.checkpoint(block, x)
+            else:
+                x = block(x)
 
         x = self.ln_out(x)
 
@@ -617,7 +615,7 @@ class RWKV(pl.LightningModule):
 
     def generate_init_weight(self):
         print(
-            f"""
+            """
 ############################################################################
 #
 # Init model weight (slow for large models)...
@@ -628,13 +626,13 @@ class RWKV(pl.LightningModule):
         m = {}
         for n in self.state_dict():
             p = self.state_dict()[n]
-            shape = p.shape
-
             gain = 1.0
             scale = 1.0
             if "ln_" in n or ".ln" in n or "time_" in n or "_mask" in n or "pos_emb" in n or '.mask.' in n:
                 m[n] = p
             else:
+                shape = p.shape
+
                 if n == "emb.weight":
                     scale = -1 * self.args.lr_init
                 else:
@@ -670,8 +668,8 @@ class RWKV(pl.LightningModule):
             elif os.environ["RWKV_FLOAT_MODE"] == "bf16":
                 m[n] = m[n].bfloat16()
 
-            # if n == "emb.weight":
-            #     print(m[n])
+                # if n == "emb.weight":
+                #     print(m[n])
 
         gc.collect()
         torch.cuda.empty_cache()

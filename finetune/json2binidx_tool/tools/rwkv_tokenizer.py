@@ -60,9 +60,9 @@ class RWKV_TOKENIZER():
             self.token2idx[v] = int(k)
 
         # precompute some tables for fast matching
-        self.table = [[[] for j in range(256)] for i in range(256)]
-        self.good = [set() for i in range(256)]
-        self.wlen = [0 for i in range(256)]
+        self.table = [[[] for _ in range(256)] for _ in range(256)]
+        self.good = [set() for _ in range(256)]
+        self.wlen = [0 for _ in range(256)]
 
         for i in reversed(range(len(sorted))): # reverse order - match longer tokens first
             s = sorted[i]
@@ -133,7 +133,7 @@ class TRIE:
     values:set
     def __init__(self, front=None, ch=None):
         self.ch = ch
-        self.to = [None for ch in range(256)]
+        self.to = [None for _ in range(256)]
         self.values = set()
         self.front = front
 
@@ -144,7 +144,7 @@ class TRIE:
             if(fr.ch!=None):
                 ret.append(fr.ch)
             fr = fr.front
-        return "<TRIE %s %s>"%(ret[::-1], self.values)
+        return f"<TRIE {ret[::-1]} {self.values}>"
     
     def add(self, key:bytes, idx:int=0, val=None):
         if(idx == len(key)):

@@ -37,8 +37,7 @@ def convert_file(
     os.makedirs(dirname, exist_ok=True)
     save_file(loaded, sf_filename, metadata={"format": "pt"})
     reloaded = load_file(sf_filename)
-    for k in loaded:
-        pt_tensor = loaded[k]
+    for k, pt_tensor in loaded.items():
         sf_tensor = reloaded[k]
         if not torch.equal(pt_tensor, sf_tensor):
             raise RuntimeError(f"The output tensors do not match for key {k}")
