@@ -10,7 +10,7 @@ class TRIE:
 
     def __init__(self, front=None, ch=None):
         self.ch = ch
-        self.to = [None for ch in range(256)]
+        self.to = [None for _ in range(256)]
         self.values = set()
         self.front = front
 
@@ -21,7 +21,7 @@ class TRIE:
             if fr.ch != None:
                 ret.append(fr.ch)
             fr = fr.front
-        return "<TRIE %s %s>" % (ret[::-1], self.values)
+        return f"<TRIE {ret[::-1]} {self.values}>"
 
     def add(self, key: bytes, idx: int = 0, val=None):
         if idx == len(key):

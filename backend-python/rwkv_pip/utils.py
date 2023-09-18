@@ -44,18 +44,17 @@ class PIPELINE:
             from rwkv_tokenizer import TRIE_TOKENIZER
 
             self.tokenizer = TRIE_TOKENIZER(
-                os.path.dirname(os.path.abspath(__file__)) + "/rwkv_vocab_v20230424.txt"
+                f"{os.path.dirname(os.path.abspath(__file__))}/rwkv_vocab_v20230424.txt"
             )
+        elif WORD_NAME.endswith(".txt"):
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from rwkv_tokenizer import TRIE_TOKENIZER
+
+            self.tokenizer = TRIE_TOKENIZER(WORD_NAME)
         else:
-            if WORD_NAME.endswith(".txt"):
-                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-                from rwkv_tokenizer import TRIE_TOKENIZER
+            from tokenizers import Tokenizer
 
-                self.tokenizer = TRIE_TOKENIZER(WORD_NAME)
-            else:
-                from tokenizers import Tokenizer
-
-                self.tokenizer = Tokenizer.from_file(WORD_NAME)
+            self.tokenizer = Tokenizer.from_file(WORD_NAME)
 
     def refine_context(self, context):
         context = context.strip().split("\n")
@@ -92,7 +91,6 @@ class PIPELINE:
                 probs = probs ** (1.0 / temperature)
             probs = probs / np.sum(probs)
             out = np.random.choice(a=len(probs), p=probs)
-            return int(out)
         else:
             sorted_ids = torch.argsort(probs)
             sorted_probs = probs[sorted_ids]
@@ -105,7 +103,8 @@ class PIPELINE:
             if temperature != 1.0:
                 probs = probs ** (1.0 / temperature)
             out = torch.multinomial(probs, num_samples=1)[0]
-            return int(out)
+
+        return int(out)
 
     def generate(
         self, ctx, token_count=100, args=PIPELINE_ARGS(), callback=None, state=None

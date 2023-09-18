@@ -10,7 +10,7 @@ def my_save(dd, ff):
         torch.save(dd, ff)
     else:
         fn = ff.split('/')[-1]
-        fff = '/dev/shm/' + fn
+        fff = f'/dev/shm/{fn}'
         torch.save(dd, fff)
         subprocess.Popen(f" aws s3 mv {fff} s3://rwkv-14b-4k/{fn} --quiet", shell=True)
 
@@ -59,7 +59,7 @@ class train_callback(pl.Callback):
             if trainer.is_global_zero:  # logging
                 trainer.my_loss_sum = 0
                 trainer.my_loss_count = 0
-                trainer.my_log = open(args.proj_dir + "/train_log.txt", "a")
+                trainer.my_log = open(f"{args.proj_dir}/train_log.txt", "a")
                 trainer.my_log.write(f"NEW RUN {args.my_timestamp}\n{vars(self.args)}\n")
                 try:
                     print(f"\n{trainer.strategy.config}\n")
@@ -72,48 +72,49 @@ class train_callback(pl.Callback):
                     import wandb
                     wandb.init(
                         project=args.wandb,
-                        name=args.run_name + " " + args.my_timestamp,
+                        name=f"{args.run_name} {args.my_timestamp}",
                         config=args,
                         save_code=False,
                     )
                     trainer.my_wandb = wandb
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if not trainer.is_global_zero:
+            return
+        t_now = time.time_ns()
         args = self.args
-        if trainer.is_global_zero:  # logging
-            t_now = time.time_ns()
-            token_per_step = args.ctx_len * args.real_bsz
-            real_step = trainer.global_step + args.epoch_begin * args.epoch_steps
-            kt_s = 0
-            try:
-                t_cost = (t_now - trainer.my_time_ns) / 1e9
-                kt_s = token_per_step / t_cost / 1000
-                self.log("REAL it/s", 1.0 / t_cost, prog_bar=True, on_step=True)
-                self.log("Kt/s", kt_s, prog_bar=True, on_step=True)
-            except:
-                pass
-            trainer.my_time_ns = t_now
-            trainer.my_loss = trainer.my_loss_all.float().mean().item()
-            trainer.my_loss_sum += trainer.my_loss
-            trainer.my_loss_count += 1
-            trainer.my_epoch_loss = trainer.my_loss_sum / trainer.my_loss_count
-            self.log("lr", trainer.my_lr, prog_bar=True, on_step=True)
-            self.log("loss", trainer.my_epoch_loss, prog_bar=True, on_step=True)
-            # self.log("s", real_step, prog_bar=True, on_step=True)
+        token_per_step = args.ctx_len * args.real_bsz
+        real_step = trainer.global_step + args.epoch_begin * args.epoch_steps
+        kt_s = 0
+        try:
+            t_cost = (t_now - trainer.my_time_ns) / 1e9
+            kt_s = token_per_step / t_cost / 1000
+            self.log("REAL it/s", 1.0 / t_cost, prog_bar=True, on_step=True)
+            self.log("Kt/s", kt_s, prog_bar=True, on_step=True)
+        except:
+            pass
+        trainer.my_time_ns = t_now
+        trainer.my_loss = trainer.my_loss_all.float().mean().item()
+        trainer.my_loss_sum += trainer.my_loss
+        trainer.my_loss_count += 1
+        trainer.my_epoch_loss = trainer.my_loss_sum / trainer.my_loss_count
+        self.log("lr", trainer.my_lr, prog_bar=True, on_step=True)
+        self.log("loss", trainer.my_epoch_loss, prog_bar=True, on_step=True)
+        # self.log("s", real_step, prog_bar=True, on_step=True)
 
-            if len(args.wandb) > 0:
-                lll = {"loss": trainer.my_loss, "lr": trainer.my_lr, "Gtokens": real_step * token_per_step / 1e9}
-                if kt_s > 0:
-                    lll["kt/s"] = kt_s
-                trainer.my_wandb.log(lll, step=int(real_step))
-            if args.magic_prime > 0:
-                expand_factor = 2 if args.my_qa_mask > 0 else 1
-                if int(real_step) == int(args.magic_prime * expand_factor // args.real_bsz) - 1:
-                    to_save_dict = pl_module.state_dict()
-                    my_save(
-                        to_save_dict,
-                        f"{args.proj_dir}/rwkv-final.pth",
-                    )
+        if len(args.wandb) > 0:
+            lll = {"loss": trainer.my_loss, "lr": trainer.my_lr, "Gtokens": real_step * token_per_step / 1e9}
+            if kt_s > 0:
+                lll["kt/s"] = kt_s
+            trainer.my_wandb.log(lll, step=int(real_step))
+        if args.magic_prime > 0:
+            expand_factor = 2 if args.my_qa_mask > 0 else 1
+            if int(real_step) == int(args.magic_prime * expand_factor // args.real_bsz) - 1:
+                to_save_dict = pl_module.state_dict()
+                my_save(
+                    to_save_dict,
+                    f"{args.proj_dir}/rwkv-final.pth",
+                )
 
 
     def on_train_epoch_start(self, trainer, pl_module):
@@ -126,41 +127,46 @@ class train_callback(pl.Callback):
         # print(f'########## world_size {dataset.world_size} global_rank {dataset.global_rank} real_epoch {dataset.real_epoch} ##########')
 
     def on_train_epoch_end(self, trainer, pl_module):
+        if not trainer.is_global_zero:
+            return
         args = self.args
-        if trainer.is_global_zero:  # logging & save state_dict
-            if (args.epoch_save > 0 and trainer.current_epoch % args.epoch_save == 0) or trainer.current_epoch == args.epoch_count - 1:
-                if args.data_type == 'wds_img':
-                    raw_dict = pl_module.state_dict()
-                    to_save_dict = {}
-                    for k in raw_dict:
-                        if k.startswith('encoder.') or k.startswith('decoder.'):
-                            to_save_dict[k] = raw_dict[k]
-                else:
-                    to_save_dict = pl_module.state_dict()
+        if (args.epoch_save > 0 and trainer.current_epoch % args.epoch_save == 0) or trainer.current_epoch == args.epoch_count - 1:
+            if args.data_type == 'wds_img':
+                raw_dict = pl_module.state_dict()
+                to_save_dict = {
+                    k: raw_dict[k]
+                    for k in raw_dict
+                    if k.startswith('encoder.') or k.startswith('decoder.')
+                }
+            else:
+                to_save_dict = pl_module.state_dict()
 
-                if args.lora:
-                    enable_time_finetune = 'time' in LORA_CONFIG["parts"]
-                    enable_ln_finetune = 'ln' in LORA_CONFIG["parts"]
-                    lora_dict = {}
-                    for name, state in to_save_dict.items():
-                        if ('.lora_' in name
-                                or (enable_time_finetune and '.time_' in name)
-                                or (enable_ln_finetune and '.ln' in name)):
-                            lora_dict[name] = state
-                    to_save_dict = lora_dict
-
-                try:
-                    my_save(
-                        to_save_dict,
-                        f"{args.proj_dir}/rwkv-{args.epoch_begin + trainer.current_epoch}.pth",
+            if args.lora:
+                enable_time_finetune = 'time' in LORA_CONFIG["parts"]
+                enable_ln_finetune = 'ln' in LORA_CONFIG["parts"]
+                lora_dict = {
+                    name: state
+                    for name, state in to_save_dict.items()
+                    if (
+                        '.lora_' in name
+                        or (enable_time_finetune and '.time_' in name)
+                        or (enable_ln_finetune and '.ln' in name)
                     )
-                except Exception as e:
-                    print('Error\n\n', e, '\n\n')
-            trainer.my_log.write(f"{args.epoch_begin + trainer.current_epoch} {trainer.my_epoch_loss:.6f} {math.exp(trainer.my_epoch_loss):.4f} {trainer.my_lr:.8f} {datetime.datetime.now()} {trainer.current_epoch}\n")
-            trainer.my_log.flush()
+                }
+                to_save_dict = lora_dict
 
-            trainer.my_loss_sum = 0
-            trainer.my_loss_count = 0
+            try:
+                my_save(
+                    to_save_dict,
+                    f"{args.proj_dir}/rwkv-{args.epoch_begin + trainer.current_epoch}.pth",
+                )
+            except Exception as e:
+                print('Error\n\n', e, '\n\n')
+        trainer.my_log.write(f"{args.epoch_begin + trainer.current_epoch} {trainer.my_epoch_loss:.6f} {math.exp(trainer.my_epoch_loss):.4f} {trainer.my_lr:.8f} {datetime.datetime.now()} {trainer.current_epoch}\n")
+        trainer.my_log.flush()
+
+        trainer.my_loss_sum = 0
+        trainer.my_loss_count = 0
 
 
 @rank_zero_only

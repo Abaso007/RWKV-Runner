@@ -128,7 +128,7 @@ if os.environ.get("RWKV_CUDA_ON") == "1":
     @MyStatic
     def cuda_mm8_seq(B: int, N: int, M: int, x, w, mx, rx, my, ry):
         assert x.dtype == mx.dtype == rx.dtype == my.dtype == ry.dtype
-        assert x.dtype == torch.float32 or x.dtype == torch.float16
+        assert x.dtype in [torch.float32, torch.float16]
         assert w.dtype == torch.uint8
         assert x.shape == (B, N)
         assert w.shape == (N, M)
@@ -141,7 +141,7 @@ if os.environ.get("RWKV_CUDA_ON") == "1":
     @MyStatic
     def cuda_mm8_one(N: int, M: int, x, w, mx, rx, my, ry):
         assert x.dtype == mx.dtype == rx.dtype == my.dtype == ry.dtype
-        assert x.dtype == torch.float32 or x.dtype == torch.float16
+        assert x.dtype in [torch.float32, torch.float16]
         assert w.dtype == torch.uint8
         assert x.shape == (N,)
         assert w.shape == (N, M)
@@ -160,29 +160,29 @@ if os.environ.get("RWKV_CUDA_ON") == "1":
     def gemm(a, b, output_dtype: Optional[torch.dtype] = None):
         if output_dtype is None:
             output_dtype = a.dtype
-        if a.dtype == b.dtype == torch.float16 and a.device.type == "cuda":
-            if len(a.shape) == 1:
-                assert len(b.shape) == 2
-                c = torch.empty((b.shape[-1],), dtype=output_dtype, device=a.device)
-                a = a.unsqueeze(0)
-            else:
-                assert len(a.shape) == len(b.shape)
-                assert len(a.shape) == 2 or len(a.shape) == 3
-                # torch.empty((*a.shape[:-1], b.shape[-1])) doesn't work with jit
-                if len(a.shape) == 2:
-                    c = torch.empty(
-                        (a.shape[0], b.shape[-1]), dtype=output_dtype, device=a.device
-                    )
-                else:
-                    c = torch.empty(
-                        (a.shape[0], a.shape[1], b.shape[-1]),
-                        dtype=output_dtype,
-                        device=a.device,
-                    )
-            torch.ops.rwkv.gemm_fp16_cublas(a, b, c)
-            return c
-        else:
+        if not a.dtype == b.dtype == torch.float16 or a.device.type != "cuda":
             return (a @ b).to(output_dtype)
+        if len(a.shape) == 1:
+            assert len(b.shape) == 2
+            c = torch.empty((b.shape[-1],), dtype=output_dtype, device=a.device)
+            a = a.unsqueeze(0)
+        else:
+            assert len(a.shape) == len(b.shape)
+            assert len(a.shape) in {2, 3}
+                # torch.empty((*a.shape[:-1], b.shape[-1])) doesn't work with jit
+            c = (
+                torch.empty(
+                    (a.shape[0], b.shape[-1]), dtype=output_dtype, device=a.device
+                )
+                if len(a.shape) == 2
+                else torch.empty(
+                    (a.shape[0], a.shape[1], b.shape[-1]),
+                    dtype=output_dtype,
+                    device=a.device,
+                )
+            )
+        torch.ops.rwkv.gemm_fp16_cublas(a, b, c)
+        return c
 
 else:
 

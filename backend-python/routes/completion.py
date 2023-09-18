@@ -111,7 +111,7 @@ async def eval_rwkv(
 ):
     global requests_num
     requests_num = requests_num + 1
-    quick_log(request, None, "Start Waiting. RequestsNum: " + str(requests_num))
+    quick_log(request, None, f"Start Waiting. RequestsNum: {str(requests_num)}")
     while completion_lock.locked():
         if await request.is_disconnected():
             requests_num = requests_num - 1
@@ -119,7 +119,7 @@ async def eval_rwkv(
             quick_log(
                 request,
                 None,
-                "Stop Waiting (Lock). RequestsNum: " + str(requests_num),
+                f"Stop Waiting (Lock). RequestsNum: {str(requests_num)}",
             )
             return
         await asyncio.sleep(0.1)
@@ -131,7 +131,7 @@ async def eval_rwkv(
                 quick_log(
                     request,
                     None,
-                    "Stop Waiting (Lock). RequestsNum: " + str(requests_num),
+                    f"Stop Waiting (Lock). RequestsNum: {str(requests_num)}",
                 )
                 return
             set_rwkv_config(model, global_var.get(global_var.Model_Config))
@@ -249,13 +249,13 @@ async def chat_completions(body: ChatCompletionBody, request: Request):
     user = model.user if body.user_name is None else body.user_name
     bot = model.bot if body.assistant_name is None else body.assistant_name
 
-    is_raven = model.rwkv_type == RWKVType.Raven
-
     completion_text: str = ""
     basic_system: Union[str, None] = None
     if body.presystem:
         if body.messages[0].role == Role.System:
             basic_system = body.messages[0].content
+
+        is_raven = model.rwkv_type == RWKVType.Raven
 
         if basic_system is None:
             completion_text = (
@@ -302,9 +302,9 @@ The following is a coherent verbose detailed conversation between a girl named {
     for message in body.messages[(0 if basic_system is None else 1) :]:
         append_message: str = ""
         if message.role == Role.User:
-            append_message = f"{user}{interface} " + message.content
+            append_message = f"{user}{interface} {message.content}"
         elif message.role == Role.Assistant:
-            append_message = f"{bot}{interface} " + message.content
+            append_message = f"{bot}{interface} {message.content}"
         elif message.role == Role.System:
             append_message = message.content
         if not message.raw:
@@ -331,13 +331,12 @@ The following is a coherent verbose detailed conversation between a girl named {
                 model, request, body, completion_text, body.stream, body.stop, True
             )
         )
-    else:
-        try:
-            return await eval_rwkv(
-                model, request, body, completion_text, body.stream, body.stop, True
-            ).__anext__()
-        except StopAsyncIteration:
-            return None
+    try:
+        return await eval_rwkv(
+            model, request, body, completion_text, body.stream, body.stop, True
+        ).__anext__()
+    except StopAsyncIteration:
+        return None
 
 
 @router.post("/v1/completions", tags=["Completions"])
@@ -357,13 +356,12 @@ async def completions(body: CompletionBody, request: Request):
         return EventSourceResponse(
             eval_rwkv(model, request, body, body.prompt, body.stream, body.stop, False)
         )
-    else:
-        try:
-            return await eval_rwkv(
-                model, request, body, body.prompt, body.stream, body.stop, False
-            ).__anext__()
-        except StopAsyncIteration:
-            return None
+    try:
+        return await eval_rwkv(
+            model, request, body, body.prompt, body.stream, body.stop, False
+        ).__anext__()
+    except StopAsyncIteration:
+        return None
 
 
 class EmbeddingsBody(BaseModel):
@@ -401,7 +399,7 @@ async def embeddings(body: EmbeddingsBody, request: Request):
 
     global requests_num
     requests_num = requests_num + 1
-    quick_log(request, None, "Start Waiting. RequestsNum: " + str(requests_num))
+    quick_log(request, None, f"Start Waiting. RequestsNum: {str(requests_num)}")
     while completion_lock.locked():
         if await request.is_disconnected():
             requests_num = requests_num - 1
@@ -409,7 +407,7 @@ async def embeddings(body: EmbeddingsBody, request: Request):
             quick_log(
                 request,
                 None,
-                "Stop Waiting (Lock). RequestsNum: " + str(requests_num),
+                f"Stop Waiting (Lock). RequestsNum: {str(requests_num)}",
             )
             return
         await asyncio.sleep(0.1)
@@ -421,14 +419,11 @@ async def embeddings(body: EmbeddingsBody, request: Request):
                 quick_log(
                     request,
                     None,
-                    "Stop Waiting (Lock). RequestsNum: " + str(requests_num),
+                    f"Stop Waiting (Lock). RequestsNum: {str(requests_num)}",
                 )
                 return
 
-            base64_format = False
-            if body.encoding_format == "base64":
-                base64_format = True
-
+            base64_format = body.encoding_format == "base64"
             embeddings = []
             prompt_tokens = 0
             if type(body.input) == list:
@@ -469,17 +464,9 @@ async def embeddings(body: EmbeddingsBody, request: Request):
             requests_num = requests_num - 1
             if await request.is_disconnected():
                 print(f"{request.client} Stop Waiting")
-                quick_log(
-                    request,
-                    None,
-                    "Stop Waiting. RequestsNum: " + str(requests_num),
-                )
+                quick_log(request, None, f"Stop Waiting. RequestsNum: {str(requests_num)}")
                 return
-            quick_log(
-                request,
-                None,
-                "Finished. RequestsNum: " + str(requests_num),
-            )
+            quick_log(request, None, f"Finished. RequestsNum: {str(requests_num)}")
 
             ret_data = [
                 {

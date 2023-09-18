@@ -103,7 +103,7 @@ class AbstractRWKV(ABC):
             w = self.w
             args = self.args
 
-            if state == None:
+            if state is None:
                 state = [None] * args.n_layer * 5
                 for i in range(
                     args.n_layer
@@ -315,8 +315,7 @@ class AbstractRWKV(ABC):
                             break
                     elif type(stop) == list:
                         stop_exist_regex = "|".join(stop)
-                        matched = re.search(stop_exist_regex, response)
-                        if matched:
+                        if matched := re.search(stop_exist_regex, response):
                             try:
                                 state_cache.add_state(
                                     state_cache.AddStateBody(
@@ -421,7 +420,7 @@ class TextRWKV(AbstractRWKV):
         token_len = len(tokens)
         self.model_tokens += tokens
 
-        while len(tokens) > 0:
+        while tokens:
             out, self.model_state = self.model.forward(
                 tokens[: self.CHUNK_LEN], self.model_state
             )
@@ -507,7 +506,7 @@ class MusicRWKV(AbstractRWKV):
         return out, token_len
 
     def delta_postprocess(self, delta: str) -> str:
-        return " " + delta
+        return f" {delta}"
 
 
 class ModelConfigBody(BaseModel):
@@ -533,10 +532,7 @@ def set_rwkv_config(model: AbstractRWKV, body: ModelConfigBody):
     if body.max_tokens is not None:
         model.max_tokens_per_generation = body.max_tokens
     if body.temperature is not None:
-        if body.temperature < 0.1:
-            model.temperature = 0.1
-        else:
-            model.temperature = body.temperature
+        model.temperature = max(body.temperature, 0.1)
     if body.top_p is not None:
         model.top_p = body.top_p
     if body.presence_penalty is not None:

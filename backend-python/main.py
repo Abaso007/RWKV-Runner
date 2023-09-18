@@ -97,5 +97,5 @@ def get_args(args: Union[Sequence[str], None] = None):
 if __name__ == "__main__":
     args = get_args()
     os.environ["RWKV_RUNNER_PARAMS"] = " ".join(sys.argv[1:])
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print(f"--- {time.time() - start_time} seconds ---")
     uvicorn.run("main:app", port=args.port, host=args.host, workers=1)

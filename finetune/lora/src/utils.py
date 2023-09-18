@@ -26,7 +26,7 @@ class TOKENIZER():
             self.vocab_size = len(self.tokenizer)
         else:
             self.charMode = True
-            with open(WORD_NAME + '.json', "r", encoding="utf-16") as result_file:
+            with open(f'{WORD_NAME}.json', "r", encoding="utf-16") as result_file:
                 self.word_table = json.load(result_file)
 
             self.vocab_size = len(self.word_table)
@@ -52,14 +52,10 @@ class TOKENIZER():
 
         probs = F.softmax(out, dim=-1)
 
-        if self.charMode:
-            if self.itos[lastChar] == '\n':
-                top_p = top_p_newline
-            else:
-                top_p = top_p_usual
+        if self.charMode and self.itos[lastChar] == '\n':
+            top_p = top_p_newline
         else:
             top_p = top_p_usual
-
         if os.environ["RWKV_RUN_DEVICE"] == "cpu":
             probs = probs.numpy()
             sorted_probs = np.sort(probs)[::-1]
@@ -70,7 +66,6 @@ class TOKENIZER():
                 probs = probs.pow(1.0 / temperature)
             probs = probs / np.sum(probs)
             out = np.random.choice(a=len(probs), p=probs)
-            return out
         else:
             sorted_probs = torch.sort(probs, descending=True)[0]
             cumulative_probs = torch.cumsum(sorted_probs, dim=-1).cpu().numpy()
@@ -79,24 +74,21 @@ class TOKENIZER():
             if temperature != 1.0:
                 probs = probs.pow(1.0 / temperature)
             out = torch.multinomial(probs, num_samples=1)[0]
-            return out
+
+        return out
 
 def MaybeIsPrime(number):
-    if FermatPrimalityTest(number) and MillerRabinPrimalityTest(number):
-        return True
-    else:
-        return False
+    return bool(FermatPrimalityTest(number) and MillerRabinPrimalityTest(number))
 
 
 def FermatPrimalityTest(number):
-    if number > 1:
-        for time in range(3):
-            randomNumber = random.randint(2, number) - 1
-            if pow(randomNumber, number - 1, number) != 1:
-                return False
-        return True
-    else:
+    if number <= 1:
         return False
+    for _ in range(3):
+        randomNumber = random.randint(2, number) - 1
+        if pow(randomNumber, number - 1, number) != 1:
+            return False
+    return True
 
 
 def MillerRabinPrimalityTest(number):
@@ -110,20 +102,20 @@ def MillerRabinPrimalityTest(number):
         oddPartOfNumber = oddPartOfNumber // 2
         timesTwoDividNumber = timesTwoDividNumber + 1
 
-    for time in range(3):
+    for _ in range(3):
         while True:
             randomNumber = random.randint(2, number) - 1
-            if randomNumber != 0 and randomNumber != 1:
+            if randomNumber not in [0, 1]:
                 break
 
         randomNumberWithPower = pow(randomNumber, oddPartOfNumber, number)
 
-        if (randomNumberWithPower != 1) and (randomNumberWithPower != number - 1):
+        if randomNumberWithPower not in [1, number - 1]:
             iterationNumber = 1
 
             while (iterationNumber <= timesTwoDividNumber - 1) and (randomNumberWithPower != number - 1):
                 randomNumberWithPower = pow(randomNumberWithPower, 2, number)
-                iterationNumber = iterationNumber + 1
+                iterationNumber += 1
             if randomNumberWithPower != (number - 1):
                 return False
 

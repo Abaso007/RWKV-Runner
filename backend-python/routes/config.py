@@ -14,16 +14,18 @@ def get_tokens_path(model_path: str):
     model_path = model_path.lower()
     tokenizer_dir = f"{pathlib.Path(__file__).parent.parent.resolve()}/rwkv_pip/"
 
-    default_tokens_path = tokenizer_dir + "20B_tokenizer.json"
+    default_tokens_path = f"{tokenizer_dir}20B_tokenizer.json"
 
-    if "raven" in model_path:
+    if (
+        "raven" in model_path
+        or "world" not in model_path
+        and "midi" not in model_path
+    ):
         return default_tokens_path
     elif "world" in model_path:
         return "rwkv_vocab_v20230424"
-    elif "midi" in model_path:
-        return tokenizer_dir + "tokenizer-midi.json"
     else:
-        return default_tokens_path
+        return f"{tokenizer_dir}tokenizer-midi.json"
 
 
 class SwitchModelBody(BaseModel):
@@ -121,10 +123,7 @@ def status():
     import GPUtil
 
     gpus = GPUtil.getGPUs()
-    if len(gpus) == 0:
-        device_name = "CPU"
-    else:
-        device_name = gpus[0].name
+    device_name = "CPU" if len(gpus) == 0 else gpus[0].name
     return {
         "status": global_var.get(global_var.Model_Status),
         "pid": os.getpid(),

@@ -87,12 +87,7 @@ if soundfont_data is not None:
                     file_name = f'p{pitch}_v{velocity}.mp3'
 
                     # Check if the file already exists
-                    if os.path.exists(f"{instrument_name}/{file_name}"):
-                        pass
-                        #print(f"Skipping {instrument_name}/{file_name} - File already exists")
-
-                    else:
-
+                    if not os.path.exists(f"{instrument_name}/{file_name}"):
                         # Download pitch/velocity file
                         file_url = f"{base_url}/{instrument_path}/{file_name}"
 
